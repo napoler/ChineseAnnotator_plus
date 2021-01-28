@@ -30,10 +30,10 @@ class Example(Frame):
         self.OS = platform.system().lower()
         self.parent = parent
         self.fileName = ""
-        self.debug = True
+        self.debug = False
         self.colorAllChunk = True
         self.recommendFlag = True
-        self.history = deque(maxlen=200)
+        self.history = deque(maxlen=20)
         self.currentContent = deque(maxlen=1)
         self.pressCommand = {'a':"Artifical",
                              'b':"Event",
@@ -52,17 +52,8 @@ class Example(Frame):
         if len(self.pressCommand) > 20:
             self.textRow = len(self.pressCommand)
         else:
-            # 这里是核心编辑区域的字号
-            self.textRow = 15
-        # 设置核心编辑区的行间距
-        # 段落首行上边距
-        self.spacing1=10
-        # 行边距
-        self.spacing2=15
-        # 段落下边距
-        self.spacing3=50
+            self.textRow = 20
         self.textColumn = 5
-        # 标记数据的格式
         self.tagScheme = "BMES"
         self.onlyNP = False  ## for exporting sequence 
         self.keepRecommend = True        
@@ -104,8 +95,7 @@ class Example(Frame):
         self.lbl = Label(self, text=u"文件：没有打开的文件")
         self.lbl.grid(sticky=W, pady=4, padx=5)
         self.fnt = tkFont.Font(family=self.textFontStyle,size=self.textRow,weight="bold",underline=0)
-        # 核心编辑区
-        self.text = Text(self,spacing1=self.spacing1,spacing2=self.spacing2,spacing3=self.spacing3,font=self.fnt, selectbackground=self.selectColor)
+        self.text = Text(self, font=self.fnt, selectbackground=self.selectColor)
         self.text.grid(row=1, column=0, columnspan=self.textColumn, rowspan=self.textRow, padx=12, sticky=E+W+S+N)
 
         self.sb = Scrollbar(self)
@@ -141,13 +131,6 @@ class Example(Frame):
         self.RecommendModelName.grid(row=12, column=self.textColumn +1, pady=4)
         self.RecommendModelFlag = Label(self, text=str(self.recommendFlag), foreground="red", font=(self.textFontStyle, 14, "bold"))
         self.RecommendModelFlag.grid(row=13, column=self.textColumn + 1, pady=4)
-        # 设置帮助文本
-
-        self.Help = Label(self, text="快捷键：", foreground="#333333", font=(self.textFontStyle, 13, "bold"))
-        self.Help.grid(row=13, column=self.textColumn +1, pady=4)
-
-        self.Help = Label(self, text="Q：取消标记 \n ctrl+z:撤销", foreground="#333333", font=(self.textFontStyle, 12, "bold"))
-        self.Help.grid(row=14, column=self.textColumn +1, pady=4)
 
         # recommend_value = StringVar()
         # recommend_value.set("R")
@@ -703,6 +686,9 @@ class Example(Frame):
                 else:
                     if not self.keepRecommend:
                         line = removeRecommendContent(line, self.recommendRe)
+                    # print(line, self.seged, self.tagScheme, self.onlyNP, self.goldAndrecomRe)
+                    # exit()
+                    #处理一句标记信息
                     wordTagPairs = getWordTagPairs(line, self.seged, self.tagScheme, self.onlyNP, self.goldAndrecomRe)
                     for wordTag in wordTagPairs:
                         seqFile.write(wordTag)
@@ -721,6 +707,7 @@ class Example(Frame):
 
 		
 def getWordTagPairs(tagedSentence, seged=True, tagScheme="BMES", onlyNP=False, entityRe=r'\[\@.*?\#.*?\*\]'):
+    """处理单句标记信息"""
     newSent = tagedSentence.strip('\n')
     filterList = re.findall(entityRe, newSent)
     newSentLength = len(newSent)
