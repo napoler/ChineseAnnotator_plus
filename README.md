@@ -1,5 +1,12 @@
 中文自然语言处理 (NLP) 标注工具，与 有志之士 共同 促进 中文 自然语言处理 的 发展。
 
+
+
+使用bert分词方案，请下载对应bert模型并且
+https://www.kaggle.com/terrychanorg/chinese-roberta-wwm-ext-pytorch
+
+
+
 ## 一、关于
 - 这个项目最原始的代码是从 YEDA fork 过来的，访问 [YEDA](https://github.com/jiesutd/YEDDA) 项目，了解更多信息
 - 这 **不是** 一个 web 应用，而是一个基于 Python tkinter 的轻量级桌面端应用

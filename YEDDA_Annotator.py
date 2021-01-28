@@ -18,8 +18,13 @@ import pickle
 import os.path
 import platform
 import codecs
-
+import regex
 from utils.recommend import *
+# import pdb
+# pdb.set_trace()
+
+Bert_path="/home/terry/dev/model/chinese_roberta_wwm_ext_pytorch/"
+
 
 
 class Example(Frame):
@@ -33,7 +38,7 @@ class Example(Frame):
         self.debug = False
         self.colorAllChunk = True
         self.recommendFlag = True
-        self.history = deque(maxlen=20)
+        self.history = deque(maxlen=200)
         self.currentContent = deque(maxlen=1)
         self.pressCommand = {'a':"Artifical",
                              'b':"Event",
@@ -52,9 +57,9 @@ class Example(Frame):
         if len(self.pressCommand) > 20:
             self.textRow = len(self.pressCommand)
         else:
-            self.textRow = 20
+            self.textRow = 15
         self.textColumn = 5
-        self.tagScheme = "BMES"
+        self.tagScheme = "BMES"   #BNES  or BIO
         self.onlyNP = False  ## for exporting sequence 
         self.keepRecommend = True        
 
@@ -63,7 +68,7 @@ class Example(Frame):
 		True 用于有词语之间有空格间隔，如英文或已分词的中文，
 		False 用于按字分隔，如没有分词的中文
         '''
-        self.seged = False  ## False 用于没有分词的中文，True 用于英文或已分词的中文
+        self.seged = True  ## False 用于没有分词的中文，True 用于英文或已分词的中文 True 启用Bert模式分词
         self.configFile = "config"
         self.entityRe = r'\[\@.*?\#.*?\*\](?!\#)'
         self.insideNestEntityRe = r'\[\@\[\@(?!\[\@).*?\#.*?\*\]\#'
@@ -93,44 +98,55 @@ class Example(Frame):
             self.rowconfigure(idx, weight =1)
         
         self.lbl = Label(self, text=u"文件：没有打开的文件")
-        self.lbl.grid(sticky=W, pady=4, padx=5)
-        self.fnt = tkFont.Font(family=self.textFontStyle,size=self.textRow,weight="bold",underline=0)
-        self.text = Text(self, font=self.fnt, selectbackground=self.selectColor)
-        self.text.grid(row=1, column=0, columnspan=self.textColumn, rowspan=self.textRow, padx=12, sticky=E+W+S+N)
+        self.lbl.grid(row=self.textRow +2,column=1,sticky=W, pady=4, padx=5)
 
+        # abtn1 = Button(self, text="打开", command=self.onOpen)
+        # abtn1.grid(row=1, column=0,columnspan=1)
+
+        #默认文字信息
+        self.fnt = tkFont.Font(family=self.textFontStyle,size=self.textRow,weight="bold",underline=0)
+
+        #核心编辑区域
+        self.text = Text(self,spacing1=10,spacing2=10,spacing3=20, font=self.fnt, selectbackground=self.selectColor)
+        # self.text.grid(row=4, column=1, columnspan=self.textColumn, rowspan=self.textRow, padx=12, sticky=E+W+S+N)
+        self.text.grid(row=0, column=1, columnspan=self.textColumn, rowspan=self.textRow-3, padx=12, sticky=E+W+S+N)
+
+
+        # 滚动条
         self.sb = Scrollbar(self)
         self.sb.grid(row = 1, column = self.textColumn, rowspan = self.textRow, padx=0, sticky = E+W+S+N)
         self.text['yscrollcommand'] = self.sb.set 
         self.sb['command'] = self.text.yview 
         # self.sb.pack()
 
-        abtn = Button(self, text="Open", command=self.onOpen)
-        abtn.grid(row=1, column=self.textColumn +1)
+        # 按钮区域
+        abtn = Button(self, text="打开", command=self.onOpen)
+        abtn.grid(row=1, column=0)
 
-        recButton = Button(self, text="RMOn", command=self.setInRecommendModel)
-        recButton.grid(row=2, column=self.textColumn +1)
+        recButton = Button(self, text="开启推荐", command=self.setInRecommendModel)
+        recButton.grid(row=2, column=0)
 
-        noRecButton = Button(self, text="RMOff", command=self.setInNotRecommendModel)
-        noRecButton.grid(row=3, column=self.textColumn +1)
+        noRecButton = Button(self, text="关闭推荐", command=self.setInNotRecommendModel)
+        noRecButton.grid(row=3, column=0)
 
-        ubtn = Button(self, text="ReMap", command=self.renewPressCommand)
-        ubtn.grid(row=4, column=self.textColumn +1, pady=4)
+        ubtn = Button(self, text="更新词典", command=self.renewPressCommand)
+        ubtn.grid(row=4, column=0)
 
-        exportbtn = Button(self, text="Export", command=self.generateSequenceFile)
-        exportbtn.grid(row=5, column=self.textColumn + 1, pady=4)        
+        exportbtn = Button(self, text="导出", command=self.generateSequenceFile)
+        exportbtn.grid(row=5, column=0)        
 
-        cbtn = Button(self, text="Quit", command=self.quit)
-        cbtn.grid(row=6, column=self.textColumn + 1, pady=4)
+        cbtn = Button(self, text="退出", command=self.quit)
+        cbtn.grid(row=6, column=0)
 
-        self.cursorName = Label(self, text="Cursor: ", foreground="Blue", font=(self.textFontStyle, 14, "bold"))
-        self.cursorName.grid(row=9, column=self.textColumn +1, pady=4)
+        self.cursorName = Label(self, text="光标位置: ", foreground="Blue", font=(self.textFontStyle, 14, "bold"))
+        self.cursorName.grid(row=9, column=0, pady=4,ipady=5)
         self.cursorIndex = Label(self, text=("row: %s\ncol: %s" % (0, 0)), foreground="red", font=(self.textFontStyle, 14, "bold"))
-        self.cursorIndex.grid(row=10, column=self.textColumn + 1, pady=4)
+        self.cursorIndex.grid(row=10, column=0, pady=4)
 
-        self.RecommendModelName = Label(self, text="RModel: ", foreground="Blue", font=(self.textFontStyle, 14, "bold"))
-        self.RecommendModelName.grid(row=12, column=self.textColumn +1, pady=4)
+        self.RecommendModelName = Label(self, text="推荐状态: ", foreground="Blue", font=(self.textFontStyle, 14, "bold"))
+        self.RecommendModelName.grid(row=12, column=0, pady=4,ipady=5)
         self.RecommendModelFlag = Label(self, text=str(self.recommendFlag), foreground="red", font=(self.textFontStyle, 14, "bold"))
-        self.RecommendModelFlag.grid(row=13, column=self.textColumn + 1, pady=4)
+        self.RecommendModelFlag.grid(row=13, column=0, pady=4)
 
         # recommend_value = StringVar()
         # recommend_value.set("R")
@@ -644,21 +660,24 @@ class Example(Frame):
                 self.pressCommand = pickle.load(fp)
         hight = len(self.pressCommand)
         width = 2
-        row = 0
-        mapLabel = Label(self, text =u"快捷键", foreground="blue", font=(self.textFontStyle, 14, "bold"))
-        mapLabel.grid(row=0, column = self.textColumn +2,columnspan=2, rowspan = 1, padx = 10)
+        row = 1
+
+        #修改小字体兼容中文
+        mapLabel = Label(self, text =u"快捷键", foreground="blue", font=(self.textFontStyle, 10, "bold"))
+        # mapLabel.pack(padx=5, pady=10)
+        mapLabel.grid(row=1, column = self.textColumn +2,columnspan=2, rowspan = 1, padx = 10,ipady=5)
         self.labelEntryList = []
         self.shortcutLabelList = []
         for key in sorted(self.pressCommand):
             row += 1
             # print("key: ", key, "  command: ", self.pressCommand[key])
             symbolLabel = Label(self, text =key.upper() + ": ", foreground="blue", font=(self.textFontStyle, 14, "bold"))
-            symbolLabel.grid(row=row, column = self.textColumn +2,columnspan=1, rowspan = 1, padx = 3)
+            symbolLabel.grid(row=row, column = self.textColumn +2,columnspan=1, rowspan = 1,ipady=5)
             self.shortcutLabelList.append(symbolLabel)
 
-            labelEntry = Entry(self, foreground="blue", font=(self.textFontStyle, 14, "bold"))
+            labelEntry = Entry(self, foreground="blue", font=(self.textFontStyle, 9, "bold"))
             labelEntry.insert(0, self.pressCommand[key])
-            labelEntry.grid(row=row, column = self.textColumn +3, columnspan=1, rowspan = 1)
+            labelEntry.grid(row=row, column = self.textColumn +3, columnspan=1, rowspan = 1,ipady=5,)
             self.labelEntryList.append(labelEntry)
             # print("row: ", row)
 
@@ -705,9 +724,24 @@ class Example(Frame):
         showMessage += u"文件：" + new_filename
         tkMessageBox.showinfo(u"导出信息", showMessage)
 
+def filterPunctuation(x):
+    """
+    删除中文标点
+    """
+    x = regex.sub(r'[‘’]', "'", x)
+    x = regex.sub(r'[“”]', '"', x)
+    x = regex.sub(r'[…]', '...', x)
+    x = regex.sub(r'[—]', '-', x)
+    x = regex.sub(r'[—]', '-', x)
+    x = regex.sub(r"&nbsp", "", x)
+    return x
+
 		
 def getWordTagPairs(tagedSentence, seged=True, tagScheme="BMES", onlyNP=False, entityRe=r'\[\@.*?\#.*?\*\]'):
     """处理单句标记信息"""
+    # print("tagedSentence",tagedSentence)
+    #清除掉中文标点
+    tagedSentence=filterPunctuation(tagedSentence)
     newSent = tagedSentence.strip('\n')
     filterList = re.findall(entityRe, newSent)
     newSentLength = len(newSent)
@@ -760,27 +794,49 @@ def getWordTagPairs(tagedSentence, seged=True, tagScheme="BMES", onlyNP=False, e
                 full_list.append([newSent[chunk_list[idx][2]:newSentLength], chunk_list[idx][2], newSentLength, False])
             else:
                 continue
+    # [['我觉', 0, 2, False], ['[@得你们#症状1*]', 2, 13, True], ['啊，你们……', 13, 19, False], ['[@我感觉你们新闻#描述1*]', 19, 34, True], ['界还要学习', 34, 39, False], ['[@一个，你们非常熟悉#描述1*]', 39, 56, True], ['西方的这一套value。', 56, 68, False]] False BMES False
+    # print(full_list, seged, tagScheme, onlyNP)
+    # exit()
     return turnFullListToOutputPair(full_list, seged, tagScheme, onlyNP)
 
 	
 def turnFullListToOutputPair(fullList, seged=True, tagScheme="BMES", onlyNP=False):
+    if seged:
+        from transformers import BertTokenizer
+        #加载google bert 词典
+        # tokenizer = BertTokenizer.from_pretrained(vocab_file="./vocab.txt",pretrained_model_name_or_path="bert-base-chinese")
+        tokenizer = BertTokenizer.from_pretrained(pretrained_model_name_or_path=Bert_path)
+
     pairList = []
     for eachList in fullList:
         if eachList[3]:
+            #处理标记内容
             contLabelList = eachList[0].strip('[@$]').rsplit('#', 1)
+
+            # print("contLabelList",contLabelList)
+            # contLabelList ['得你们', '症状1*']
+
             if len(contLabelList) != 2:
                 print("Error: sentence format error!")
             label = contLabelList[1].strip('*')
             if seged:
-                contLabelList[0] = contLabelList[0].split()
+                #原始是逐个字符分割，改为基于bert字典分割
+                # print("contLabelList[0]",contLabelList[0])
+                # contLabelList[0] = contLabelList[0].split()
+                contLabelList[0]=tokenizer.tokenize(contLabelList[0])
+                # print("contLabelList[0]",contLabelList[0])
+                # pass
+
             if onlyNP:
                 label = "NP"
             outList = outputWithTagScheme(contLabelList[0], label, tagScheme)
             for eachItem in outList:
                 pairList.append(eachItem)
         else:
+            #处理非标记内容
             if seged:
-                eachList[0] = eachList[0].split()
+                # eachList[0] = eachList[0].split()
+                eachList[0]=tokenizer.tokenize(eachList[0])
             for idx in range(0, len(eachList[0])):
                 basicContent = eachList[0][idx]
                 if basicContent == ' ': 
@@ -788,6 +844,10 @@ def turnFullListToOutputPair(fullList, seged=True, tagScheme="BMES", onlyNP=Fals
                 pair = basicContent + ' ' + 'O\n'
                 #pairList.append(pair)
                 pairList.append(pair)
+    # print("pairList",pairList)
+    # pairList ['我觉 O\n', '得 B-症状1\n', '你 M-症状1\n', '们 E-症状1\n', '啊，你们…… O\n', '我 B-描述1\n', '感 M-描述1\n', '觉 M-描述1\n', '你 M-描述1\n', '们 M-描述1\n', '新 M-描述1\n', '闻 E-描述1\n', '界还要学习 O\n', '一 B-描述1\n', '个 M-描述1\n', '， M-描述1\n', '你 M-描述1\n', '们 M-描述1\n', '非 M-描述1\n', '常 M-描述1\n', '熟 M-描述1\n', '悉 E-描述1\n', '西方的这一套value。 O\n']
+
+    # exit()
     return pairList
 
 	
