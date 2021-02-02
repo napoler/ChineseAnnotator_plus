@@ -32,48 +32,7 @@ from YEDDA_Annotator import getWordTagPairs
 
 Bert_path="/home/terry/dev/model/chinese_roberta_wwm_ext_pytorch/"
     
-    
-    
-    # def generateSequenceFile(self):
-    #     """生成序列标注文件"""
-    #     if (".ann" not in self.fileName) and (".txt" not in self.fileName): 
-    #         out_error = u"导出功能只能用于 .ann 或 .txt 文件。"
-    #         print(out_error)
-    #         tkMessageBox.showerror(u"导出错误!", out_error)
-    #         return -1
-			
-    #     with codecs.open(self.fileName, 'rU', encoding='utf-8') as f:
-    #         fileLines = f.readlines()
-        
-    #     lineNum = len(fileLines)
-    #     new_filename = self.fileName.split('.ann')[0]+ '.anns'
-    #     with codecs.open(new_filename, 'w', encoding='utf-8') as seqFile: 
-    #         for line in fileLines:
-    #             if len(line) <= 2:
-    #                 seqFile.write('\n')
-    #                 continue
-    #             else:
-    #                 if not self.keepRecommend:
-    #                     line = removeRecommendContent(line, self.recommendRe)
-    #                 # print(line, self.seged, self.tagScheme, self.onlyNP, self.goldAndrecomRe)
-    #                 # exit()
-    #                 #处理一句标记信息
-    #                 wordTagPairs = getWordTagPairs(line, self.seged, self.tagScheme, self.onlyNP, self.goldAndrecomRe)
-    #                 for wordTag in wordTagPairs:
-    #                     seqFile.write(wordTag)
-    #                 ## use null line to seperate sentences
-    #                 seqFile.write('\n')
-
-    #     print(u"导出序列标注文件：", new_filename)
-    #     print(u"行数：", lineNum)
-    #     showMessage =  u"导出文件成功！\n\n"   
-    #     showMessage += u"格式：" + self.tagScheme + "\n\n"
-    #     showMessage += u"推荐：" + str(self.keepRecommend) + "\n\n"
-    #     showMessage += u"分词：" + str(self.seged) + "\n\n"
-    #     showMessage += u"行数：" + str(lineNum) + "\n\n"
-    #     showMessage += u"文件：" + new_filename
-    #     tkMessageBox.showinfo(u"导出信息", showMessage)
-
+ 
 # 
 def readFile(filename="./data/ChineseDemo.txt.ann"):
     """读取文件
@@ -92,8 +51,43 @@ def readFile(filename="./data/ChineseDemo.txt.ann"):
 
 
     return text
- 
-def main(file_path,seged, tagScheme, onlyNP, goldAndrecomRe):
+def bulidLabel(data):
+    """自动构建词典文件"""
+    dict={}
+    for one in data:
+        for line in one:
+            # print(line)
+            try:
+                item=line.split(" ")[1].replace("\n","")
+        
+                dict[item]=0
+            except:
+                pass
+        
+    print(dict)
+    # !rm ./data/labels.txt
+    with open('data/labels.txt','a') as f:    #设置文件对象
+        for key in dict.keys():
+            print(key)
+            f.write(key+"\n")
+    return dict
+
+
+def mkdir(path):
+    """[创建新的文件夹]
+
+    Args:
+        path ([str]): [文件路径]
+    """
+    folder=os.path.exists(path)
+    if not folder:                   #判断是否存在文件夹如果不存在则创建为文件夹
+        os.makedirs(path)            #makedirs 创建文件时如果路径不存在会创建这个路径
+        print("---  new folder...  ---")
+        print("---  OK  ---")
+    else:
+        print("---  There is this folder!  ---")
+
+def main(file_path,seged, tagScheme, onlyNP, goldAndrecomRe,rebulidLabel=False):
     data=[]
     g = os.walk(file_path)  
 
@@ -104,7 +98,9 @@ def main(file_path,seged, tagScheme, onlyNP, goldAndrecomRe):
                 # print(readFile(os.path.join(path, file_name)))
                 text=readFile(os.path.join(path, file_name))
                 # print(len(text.split("\n")))
-
+                # if "Location" in text:
+                #     print(os.path.join(path, file_name) )
+                #     break
                 # 分割后保留分隔符
                 sentences=re.split(r"([。|！|？|\n])",text)
                 sentences.append("")
@@ -114,16 +110,20 @@ def main(file_path,seged, tagScheme, onlyNP, goldAndrecomRe):
                 
     # with open('data.txt','w') as f:    #设置文件对象
     #     for line in data[]:
-
-    with open('dev.txt','w') as f:    #设置文件对象
+    mkdir("data")
+    allData=[]
+    print("dev")
+    with open('data/dev.txt','w') as f:    #设置文件对象
 
         items=data[:int(len(data)*0.15)]
         for line in items:
             # line="我觉[@得你们#症状1*]啊，你们……[@我感觉你们新闻#描述1*]界还要学习[@一个，你们非常熟悉#描述1*]西方的这一套value。"
             tagedList= getWordTagPairs(line, seged, tagScheme, onlyNP, goldAndrecomRe)
+            allData.append(tagedList)
             f.write(''.join(tagedList))
             f.write("\n\n")
-    with open('train.txt','w') as f:    #设置文件对象
+    print("train")
+    with open('data/train.txt','w') as f:    #设置文件对象
 
         items=data[int(len(data)*0.15):int(len(data)*0.85)]
         for line in items:
@@ -132,21 +132,34 @@ def main(file_path,seged, tagScheme, onlyNP, goldAndrecomRe):
             #     print(line)
             # line="我觉[@得你们#症状1*]啊，你们……[@我感觉你们新闻#描述1*]界还要学习[@一个，你们非常熟悉#描述1*]西方的这一套value。"
             tagedList= getWordTagPairs(line, seged, tagScheme, onlyNP, goldAndrecomRe)
+            allData.append(tagedList)
             f.write(''.join(tagedList))
             f.write("\n\n")
-    with open('test.txt','w') as f:    #设置文件对象
+    print("test")
+    with open('data/test.txt','w') as f:    #设置文件对象
         items=data[int(len(data)*0.85):]
         for line in items:
             # line="我觉[@得你们#症状1*]啊，你们……[@我感觉你们新闻#描述1*]界还要学习[@一个，你们非常熟悉#描述1*]西方的这一套value。"
             tagedList= getWordTagPairs(line, seged, tagScheme, onlyNP, goldAndrecomRe)
+            allData.append(tagedList)
             f.write(''.join(tagedList))
             f.write("\n\n")
+    #创建label文件
+    if rebulidLabel:
+        print("label")
+        print("allData",allData[:10])
+        bulidLabel(allData)
 if __name__ == '__main__':
     seged=True
     tagScheme="BMES"
     onlyNP=False
     goldAndrecomRe=r'\[\@.*?\#.*?\*\](?!\#)'
-    file_path="/home/terry/dev/data/药典标注后/"
+    # file_path="/home/terry/dev/data/药典标注后/"
     # file_path="/home/terry/dev/data/test/"
-    # file_path=input("anns文件目录")
-    main(file_path,seged, tagScheme, onlyNP, goldAndrecomRe)
+    file_path=input("anns文件目录")
+    rebulidLabel=input("是否新建label（0否，1是）")
+    if int(rebulidLabel) in [0,1]:
+        
+        main(file_path,seged, tagScheme, onlyNP, goldAndrecomRe,True)
+    else:
+        print("输入有错误，退出")
